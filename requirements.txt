@@ -1,12 +1,5 @@
-<<<<<<< HEAD
-torch
-numpy
-tqdm
-gymnasium
-=======
 torch==2.5.1+cu124
 numpy==2.2.1
 tqdm==4.67.1
 gymnasium==1.0.0
 matplotlib==3.9.2
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
