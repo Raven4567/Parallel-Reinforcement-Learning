@@ -30,12 +30,9 @@ class Memory:
         del self.dones[:]
         del self.state_values[:]
         del self.log_probs[:]
-<<<<<<< HEAD
     
     def __len__(self):
         return len(self.states)
-=======
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
 
 class ActorCritic(nn.Module):
     def __init__(self, action_scaling: float, action_dim: int, observ_dim: int, has_continuous: bool):
@@ -152,11 +149,7 @@ class ActorCritic(nn.Module):
         return log_probs, value, dist_entropy
 
 class RND(nn.Module):
-<<<<<<< HEAD
     def __init__(self, in_features: int, out_features: int, beta: int = 0.02, k_epochs: int = 3):
-=======
-    def __init__(self, in_features: int, out_features: int, beta: int = 0.02, K_epochs: int = 3):
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
         super().__init__()
 
         self.target_net = nn.Sequential(
@@ -175,11 +168,8 @@ class RND(nn.Module):
             param.requires_grad = False
 
         self.beta = tensor([beta], dtype=t.float32, device=device)
-<<<<<<< HEAD
+
         self.k_epochs = k_epochs
-=======
-        self.K_epochs = K_epochs
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
 
         self.loss_fn = nn.MSELoss()
         self.optimizer = optim.Adam(self.pred_net.parameters(), lr=0.001)
@@ -210,11 +200,7 @@ class RND(nn.Module):
     def update_pred(self, values):
         self.pred_net.train()
         
-<<<<<<< HEAD
         for _ in range(self.k_epochs):
-=======
-        for _ in range(self.K_epochs):
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
             for i in values:
                 with t.no_grad():
                     targets = self.target_net(i)
@@ -231,25 +217,15 @@ class RND(nn.Module):
 class PPO:
     def __init__(self, has_continuous: bool, Action_dim: int, Observ_dim: int,  
                  action_scaling: float = None, Actor_lr: float = 0.001, Critic_lr: float = 0.0025, 
-<<<<<<< HEAD
                  k_epochs: int = 23, policy_clip: float = 0.2, GAE_lambda: float = 0.95,
                  gamma: float = 0.995, batch_size: int = 1024, mini_batch_size: int = 512, 
-                 use_RND: bool = False, beta: int = None, num_workers: int = 1
-=======
-                 GAE_lambda: float = 0.95, gamma: float = 0.995, policy_clip: float = 0.2, k_epochs: int = 23, 
-                 batch_size: int = 1024, mini_batch_size: int = 512, use_RND: bool = False
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
-                 ):
+                 use_RND: bool = False, beta: int = None, num_workers: int = 1):
 
         # Initializing the most important attributes of PPO.
         self.policy = ActorCritic(action_scaling, Action_dim, Observ_dim, has_continuous)
         self.policy_old = ActorCritic(action_scaling, Action_dim, Observ_dim, has_continuous)
         if use_RND:
-<<<<<<< HEAD
             self.rnd = RND(in_features=Observ_dim, out_features=Observ_dim, beta=beta, K_epochs=3)
-=======
-            self.rnd = RND(in_features=Observ_dim, out_features=Observ_dim, beta=0.07)
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
 
         self.policy = t.compile(self.policy)
         self.policy_old = t.compile(self.policy_old)
@@ -257,11 +233,9 @@ class PPO:
             self.rnd = t.compile(self.rnd)
 
         self.memory = Memory()
-<<<<<<< HEAD
+
         if num_workers > 1:
             self.sub_buffer = [Memory() for _ in range(num_workers)]
-=======
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
 
         self.policy_old.load_state_dict(self.policy.state_dict())
 
@@ -288,14 +262,10 @@ class PPO:
         
         self.batch_size = batch_size
         self.mini_batch_size = mini_batch_size
-<<<<<<< HEAD
         self.gamma = gamma
         self.num_workers = num_workers
 
-=======
-
         self.gamma = gamma
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
         self.policy_clip = policy_clip
         self.k_epochs = k_epochs
         self.GAE_lambda = GAE_lambda
@@ -318,7 +288,6 @@ class PPO:
 
         return action.cpu().numpy(), value.cpu().numpy(), log_prob.cpu().numpy()
     
-<<<<<<< HEAD
     def memorize(self, data: list, rank: int = None):
         if self.num_workers > 1:
             self.sub_buffer[rank].push(*data)
@@ -326,8 +295,6 @@ class PPO:
         else:
             self.memory.push(*data)
 
-=======
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
     def batch_packer(self, values: list, batch_size: int):
         batch = []
 
@@ -347,11 +314,7 @@ class PPO:
         [batch.append(mini_batches[index]) for index in range(len(values))]
 
         return batch
-<<<<<<< HEAD
-    
-=======
 
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
     def single_batch_packer(self, value: tensor, batch_size: int):
         value = value.detach().cpu().numpy()
 
@@ -367,7 +330,6 @@ class PPO:
             mini_batches.append(t.from_numpy(element_for_mini_batch).to(device))
 
         return mini_batches
-<<<<<<< HEAD
     
     def transfer_of_data(self, memory: object, second_memory: list):
         data = []
@@ -382,10 +344,7 @@ class PPO:
         data = [sum(i, []) for i in zip([memory.states, memory.actions, memory.rewards, memory.dones, memory.state_values, memory.log_probs], data)]
         
         memory.states, memory.actions, memory.rewards, memory.dones, memory.state_values, memory.log_probs = data
-        
-=======
 
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
     def compute_gae(self, rewards, dones, values, next_value):
         # Just computing of GAE.
 
@@ -402,25 +361,18 @@ class PPO:
         return returns
 
     def education(self):
-<<<<<<< HEAD
+
         if self.num_workers > 1:
             self.transfer_of_data(self.memory, self.sub_buffer)
 
-        if len(self.memory) < self.batch_size:
-=======
         if len(self.memory.states) < self.batch_size:
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
             return 
 
         old_states = t.from_numpy(np.array(self.memory.states)).to(device).detach()
         old_actions = t.from_numpy(np.array(self.memory.actions)).to(device).detach()
         old_log_probs = t.from_numpy(np.array(self.memory.log_probs)).to(device).detach()
         old_values = t.from_numpy(np.array(self.memory.state_values)).to(device).detach()
-<<<<<<< HEAD
-            
-=======
-        
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
+
         if self.use_RND:
             rewards = (
                 t.from_numpy(np.array(self.memory.rewards)).to(device) + \
@@ -438,22 +390,13 @@ class PPO:
         # Computing GAE
         state_values = t.cat([self.policy.get_value(i).squeeze(dim=-1) for i in self.single_batch_packer(old_states, self.mini_batch_size)], dim=0).detach().cpu().numpy()
         next_value = state_values[-1]
-<<<<<<< HEAD
-            
-=======
-        
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
         returns = self.compute_gae(rewards, dones, state_values, next_value)
         returns = t.from_numpy(np.array(returns)).to(device)
 
         advantages = returns - old_values # calculate advantage
 
         batches = self.batch_packer([old_states, old_actions, old_log_probs, advantages, returns], batch_size=self.batch_size)
-<<<<<<< HEAD
-            
-=======
         
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
         for _ in range(self.k_epochs):
 
             t.cuda.empty_cache() if device == 'cuda' else 0
@@ -462,35 +405,27 @@ class PPO:
                 self.optimizer.zero_grad()
 
                 mini_batches = self.batch_packer([old_states_batches, old_actions_batches, old_log_probs_batches, advantages_batches, returns_batches], batch_size=self.mini_batch_size)
-<<<<<<< HEAD
                     
                 for mini_batch_states, mini_batch_actions, mini_batch_log_probs, mini_batch_advantages, mini_batch_returns in zip(*mini_batches):
                     # Collecting log probs, values of states, and dist entropy
                     log_probs, state_values, dist_entropy = self.policy.get_evaluate(mini_batch_states, mini_batch_actions)
-                                
-=======
                 
                 for mini_batch_states, mini_batch_actions, mini_batch_log_probs, mini_batch_advantages, mini_batch_returns in zip(*mini_batches):
                     # Collecting log probs, values of states, and dist entropy
                     log_probs, state_values, dist_entropy = self.policy.get_evaluate(mini_batch_states, mini_batch_actions)
                             
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
                     # calculating and clipping of log_probs, 'cause using of exp() function can will lead to inf or nan values
                     ratios = t.exp(t.clamp(log_probs - mini_batch_log_probs, min=-20, max=20))
 
                     surr1 = ratios * mini_batch_advantages # calculating of surr1
                     surr2 = t.clamp(ratios, min=1 - self.policy_clip, max=1 + self.policy_clip) * mini_batch_advantages  # clipping of ratios, where min is 1 - policy_clip, and max is 1 + policy_clip, next multiplying on advantages
-<<<<<<< HEAD
                                 
                     # gradient is loss of actor + 0.5 * loss of critic - 0.02 * dist_entropy. 0.02 is entropy bonus
                     loss = -t.min(surr1, surr2) + 0.5 * self.loss_fn(state_values, mini_batch_returns) - 0.02 * dist_entropy
-                        
-=======
                             
                     # gradient is loss of actor + 0.5 * loss of critic - 0.02 * dist_entropy. 0.02 is entropy bonus
                     loss = -t.min(surr1, surr2) + 0.5 * self.loss_fn(state_values, mini_batch_returns) - 0.02 * dist_entropy
                     
->>>>>>> 306893baaca7656ccde72c8fe5f0762604b83c6d
                     loss.mean().backward() # using mean of loss to back propagation
 
                 nn.utils.clip_grad_value_(self.policy.Actor_parameters, 100) # cliping of actor parameters

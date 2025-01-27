@@ -52,19 +52,19 @@ def Main():
     graphic.show()
 
 if __name__ == '__main__':
-    NUM_WORKERS = 32
-    EPISODES = 8000
+    NUM_WORKERS = 3
+    EPISODES = 200
 
-    envs = [gym.make('Humanoid-v5') for _ in range(NUM_WORKERS)]
+    envs = [gym.make('CartPole-v1', max_episode_steps=500) for _ in range(NUM_WORKERS)]
 
     ppo = PPO(
-        has_continuous=True, Action_dim=envs[0].action_space.shape[0], Observ_dim=envs[0].observation_space.shape[0],
-        Actor_lr=0.0010, Critic_lr=0.0025, action_scaling=0.4,
-        policy_clip=0.2, k_epochs=23, GAE_lambda=0.95, 
-        batch_size=2048, mini_batch_size=2048, gamma=0.995,
+        has_continuous=False, Action_dim=envs[0].action_space.n, Observ_dim=envs[0].observation_space.shape[0],
+        Actor_lr=0.0010, Critic_lr=0.0025,# action_scaling=2.0,
+        policy_clip=0.2, k_epochs=14, GAE_lambda=0.95, 
+        batch_size=512, mini_batch_size=512, gamma=0.995,
         use_RND=False, beta=None, num_workers=NUM_WORKERS
     )
-                        
+                                                      
     graphic = Graphic(
         x='Episodes', y='Median rewards', title=f'Progress of learning Parallel-PPO-Agent in {envs[0].spec.id}',
         hyperparameters={
