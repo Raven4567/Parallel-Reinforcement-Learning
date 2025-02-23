@@ -4,83 +4,110 @@ from Graphic import Graphic
 import gymnasium as gym
 import numpy as np
 from tqdm import tqdm
+
+from copy import deepcopy
 #from itertools import count
 
 import threading as thd
 
-def worker(rank, envs, ppo, total_rewards):
-    env = envs[rank]
+class PPO_PRL:
+	def __init__(self, env: gym.Env, ppo: object, num_workers: int = 3, steps: int = 50000):
+		self.envs = [deepcopy(env) for _ in range(num_workers)]
+		
+		self.num_workers = num_workers
+		self.steps = steps
+		self.ppo = ppo
 
-    state = env.reset()[0]
+	def worker(self, rank: int, env: gym.Env, ppo: object, total_rewards: list, steps_score: list):
+		state = env.reset()[0]
 
-    while True:
-        action, state_value, log_prob = ppo.get_action(state)
+		while True:
+			action, state_value, log_prob = ppo.get_action(state)
 
-        next_state, reward, done, truncate, _ =  env.step(action)
-        
-        total_rewards[rank].append(reward)
-        #ppo.sub_buffer[rank].push(state, action, reward, done, state_value, log_prob)
-        ppo.memorize([state, action, reward, done, state_value, log_prob], rank)
+			next_state, reward, done, truncate, _ =  env.step(action)
+		
+			total_rewards[rank] += reward
+			steps_score[rank] += 1
 
-        state = next_state
+			ppo.memorize([state, action, reward, done, state_value, log_prob], rank)
 
-        if done or truncate:
-            break
+			state = next_state
 
-def Main():
-    for episode in (pbar := tqdm(range(EPISODES))):
-        total_rewards = [[] for _ in range(NUM_WORKERS)]
+			if done or truncate:
+				break
 
-        thread_list = []
-        for i in range(NUM_WORKERS):
-            t = thd.Thread(target=worker, args=[i, envs, ppo, total_rewards])
-            t.start()
-            thread_list.append(t)
-        
-        for t in thread_list:
-            t.join()
-        
-        median_reward = np.median([np.sum(i, axis=0) for i in total_rewards], axis=0)
-        #print(f'Median reward by episode {episode+1}: {median_reward: .1f}')
-        graphic.update(x=episode+1, y=median_reward)
-        
-        ppo.education()
+	def run(self):
 
-        pbar.set_description(f'Median reward {median_reward: .1f} by episode: {episode+1}')
-    
-    graphic.show()
+		pbar = tqdm(range(self.steps))
+		while pbar.n < self.steps:
+			steps_score = np.array([0 for _ in range(self.num_workers)])
+			rewards_score = np.array([0 for _ in range(self.num_workers)])
+
+			thread_list = []
+			for i in range(self.num_workers):
+				t = thd.Thread(target=self.worker, args=[i, self.envs[i], self.ppo, rewards_score, steps_score])
+				t.start()
+				thread_list.append(t)
+		
+			for t in thread_list:
+				t.join()
+			
+			median_reward = np.median(rewards_score, axis=0)
+			
+			graphic.update(x=pbar.n, y=median_reward)
+		
+			self.ppo.education()
+
+			self.ppo.save_weights('./data')
+
+			pbar.update(
+				np.clip(sum(steps_score), a_min=0, a_max=self.steps) if pbar.n + sum(steps_score) else sum(steps_score)
+			)
+			pbar.set_description(f'Median reward {median_reward: .1f}')
+	
+		graphic.show()
 
 if __name__ == '__main__':
-    NUM_WORKERS = 32
-    EPISODES = 800
+	NUM_WORKERS = 1024
 
-    envs = [gym.make('Pusher-v5', max_episode_steps=2000) for _ in range(NUM_WORKERS)]
+	env = gym.make('CartPole-v1', max_episode_steps=500)
 
-    ppo = PPO(
-        has_continuous=True, Action_dim=envs[0].action_space.shape[0], Observ_dim=envs[0].observation_space.shape[0],
-        Actor_lr=0.0010, Critic_lr=0.0025, action_scaling=2.0,
-        policy_clip=0.2, k_epochs=23, GAE_lambda=0.95, 
-        batch_size=2048, mini_batch_size=2048, gamma=0.995,
-        use_RND=True, beta=0.12, num_workers=NUM_WORKERS
-    )
-                                                      
-    graphic = Graphic(
-        x='Episodes', y='Median rewards', title=f'Progress of learning Parallel-PPO-Agent in {envs[0].spec.id}',
-        hyperparameters={
-            'Has_continuous': ppo.has_continuous,
-            'Actor_lr': ppo.Actor_lr,
-            'Critic_lr': ppo.Critic_lr,
-            'Policy_clip': ppo.policy_clip,
-            'K_epochs': ppo.k_epochs,
-            'GAE_lambda': ppo.GAE_lambda,
-            'Gamma': ppo.gamma,
-            'Batch_size': ppo.batch_size,
-            'Mini_batch_size': ppo.mini_batch_size,
-            'Action_scaling': ppo.action_scaling if ppo.has_continuous else None,
-            'Num_workers': NUM_WORKERS,
-            'Action_dim': ppo.action_dim,
-            'Observ_dim': ppo.observ_dim
-        }
-    )
+	ppo = PPO(
+		has_continuous=False, Action_dim=env.action_space.n, Observ_dim=env.observation_space.shape[0],
+		action_scaling=None, Actor_lr=0.0010, Critic_lr=0.0025,
+		policy_clip=0.2, k_epochs=23, GAE_lambda=0.95, 
+		batch_size=2048, mini_batch_size=2048, gamma=0.995,
+		use_RND=True, beta=0.04, num_workers=NUM_WORKERS
+	)
 
-    Main()
+	ppo.load_weights('./data')
+
+	graphic = Graphic(
+		x='Steps', y='Median rewards', title=f'Progress of learning Parallel-PPO-Agent in {env.spec.id}',
+		hyperparameters={
+			'Has_continuous': ppo.has_continuous,
+			'Action_scaling': ppo.action_scaling if ppo.has_continuous else None,
+			'Actor_lr': ppo.Actor_lr,
+			'Critic_lr': ppo.Critic_lr,
+			'Policy_clip': ppo.policy_clip,
+			'K_epochs': ppo.k_epochs,
+			'GAE_lambda': ppo.GAE_lambda,
+			'Batch_size': ppo.batch_size,
+			'Mini_batch_size': ppo.mini_batch_size,
+			'Gamma': ppo.gamma,
+			'use_RND': ppo.use_RND,
+			'beta': ppo.beta,
+			'Num_workers': NUM_WORKERS,
+			'Action_dim': ppo.action_dim,
+			'Observ_dim': ppo.observ_dim
+		}
+	)
+
+	prl = PPO_PRL(
+		env=env,
+		ppo=ppo,
+		num_workers=NUM_WORKERS,
+		steps=20000000
+	)
+
+	prl.run()
