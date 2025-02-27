@@ -68,12 +68,12 @@ class PPO_PRL:
 		graphic.show()
 
 if __name__ == '__main__':
-	NUM_WORKERS = 1024
+	NUM_WORKERS = 32
 
-	env = gym.make('CartPole-v1', max_episode_steps=500)
+	env = gym.make('Pusher-v5', max_episode_steps=1000)
 
 	ppo = PPO(
-		has_continuous=False, Action_dim=env.action_space.n, Observ_dim=env.observation_space.shape[0],
+		has_continuous=True, Action_dim=env.action_space.shape[0], Observ_dim=env.observation_space.shape[0],
 		action_scaling=None, Actor_lr=0.0010, Critic_lr=0.0025,
 		policy_clip=0.2, k_epochs=23, GAE_lambda=0.95, 
 		batch_size=2048, mini_batch_size=2048, gamma=0.995,
