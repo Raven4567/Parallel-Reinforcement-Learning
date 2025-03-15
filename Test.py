@@ -5,27 +5,26 @@ import gymnasium as gym
 from tqdm import tqdm
 from itertools import count
 
-env = gym.make('Pusher-v5', max_episode_steps=1000, render_mode='human')
+env = gym.make('CartPole-v1', max_episode_steps=500, render_mode='human')
 
 ppo = PPO(
-	has_continuous=True, Action_dim=env.action_space.shape[0], Observ_dim=env.observation_space.shape[0],
-	action_scaling=2.0, num_workers=1
+	has_continuous=False, action_dim=env.action_space.n, observ_dim=env.observation_space.shape[0],
 )
 
-ppo.load_weights('./data')
+#ppo.load_weights('code/Works/PPO_PRL')
 
 for _ in (pbar := tqdm(count())):
-	state = env.reset()[0]
+	state, _ = env.reset()
 	
 	reward_per_episode = 0
 	while True:
-		action, value, log_prob = ppo.get_action(state)
+		action, _, _ = ppo.get_action(state)
 
 		state, reward, done, truncate, _ = env.step(action)
 
 		reward_per_episode += reward
 
-		if done or truncate:
-			pbar.set_description(f'Reward per episode: {reward_per_episode}')
+		pbar.set_description(f'reward: {reward_per_episode}, done: {done or truncate}')
 			
+		if done or truncate:
 			break
