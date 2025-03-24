@@ -15,12 +15,12 @@ class Memory:
         self.state_values = []
         self.log_probs = []
     
-    def push(self, state, action, reward, done, value, log_prob):
+    def push(self, state, action, reward, done, state_value, log_prob):
         self.states.append(np.array(state, dtype=np.float32))
         self.actions.append(np.array(action, dtype=np.float32))
         self.rewards.append(np.array(reward, dtype=np.float32))
         self.dones.append(np.array(done, dtype=np.float32))
-        self.state_values.append(np.array(value, dtype=np.float32))
+        self.state_values.append(np.array(state_value, dtype=np.float32))
         self.log_probs.append(np.array(log_prob, dtype=np.float32))
     
     def clear(self):
@@ -32,7 +32,7 @@ class Memory:
         del self.log_probs[:]
 
 class ActorCritic(nn.Module):
-    def __init__(self, action_scaling: float, action_dim: int, observ_dim: int, has_continuous: bool):
+    def __init__(self, action_dim: int, observ_dim: int, has_continuous: bool, action_scaling: float):
         super().__init__()
 
         self.has_continuous = has_continuous # discrete or continuous
@@ -40,17 +40,14 @@ class ActorCritic(nn.Module):
         if self.has_continuous:
             self.action_scaling = tensor(action_scaling, dtype=t.float32, device=device) # for scaling dist.sample() if you're using continuous PPO
 
-            # action_std_init and action_var for exploration of environment
-            #self.action_std_init = action_std_init
-            #self.action_var = torch.full(size=(action_dim,), fill_value=action_std_init ** 2, device=device) 
-
-            self.max_log_of_std = t.log(self.action_scaling)
+            self.log_of_std = t.log(self.action_scaling)
                 
             self.Actor = nn.Sequential(
                 nn.Linear(observ_dim, 64),
-                nn.ReLU6(),
+                nn.ReLU6(inplace=True),
+
                 nn.Linear(64, 64),
-                nn.ReLU6(),
+                nn.ReLU6(inplace=True),
                         
             ) # Initialization of actor if you're using continuous PPO
 
@@ -60,18 +57,22 @@ class ActorCritic(nn.Module):
         else:
             self.Actor = nn.Sequential(
                 nn.Linear(observ_dim, 64),
-                nn.ReLU6(),
+                nn.ReLU6(inplace=True),
+
                 nn.Linear(64, 64),
-                nn.ReLU6(),
+                nn.ReLU6(inplace=True),
+
                 nn.Linear(64, action_dim),
                 nn.Softmax(dim=-1)
             ) # Initialization of actor if you're using discrete PPO
 
         self.Critic = nn.Sequential(
             nn.Linear(observ_dim, 64),
-            nn.ReLU6(),
+            nn.ReLU6(inplace=True),
+
             nn.Linear(64, 64),
-            nn.ReLU6(),
+            nn.ReLU6(inplace=True),
+
             nn.Linear(64, 1)
         ) # Critic's initialization
 
@@ -108,7 +109,7 @@ class ActorCritic(nn.Module):
             features = self.Actor(state)
 
             mu = F.tanh(self.mu_layer(features)) * self.action_scaling
-            std = F.softplus(t.clamp(self.log_std(features), min=-self.max_log_of_std, max=self.max_log_of_std))
+            std = F.softplus(t.clamp(self.log_std(features), min=-self.log_of_std, max=self.log_of_std))
 
             dist = distributions.Normal(mu, std)
         
@@ -126,7 +127,7 @@ class ActorCritic(nn.Module):
             features = self.Actor(state)
 
             mu = F.tanh(self.mu_layer(features)) * self.action_scaling
-            std = F.softplus(t.clamp(self.log_std(features), min=-self.max_log_of_std, max=self.max_log_of_std))
+            std = F.softplus(t.clamp(self.log_std(features), min=-self.log_of_std, max=self.log_of_std))
 
             dist = distributions.Normal(mu, std)
 
@@ -145,7 +146,7 @@ class ActorCritic(nn.Module):
         return log_probs, state_value, dist_entropy
 
 class RND(nn.Module):
-    def __init__(self, in_features: int, out_features: int, beta: int = 0.02, k_epochs: int = 3):
+    def __init__(self, in_features: int, out_features: int, beta: int = 0.01, k_epochs: int = 3):
         super().__init__()
 
         self.target_net = nn.Sequential(
@@ -186,11 +187,11 @@ class RND(nn.Module):
         target_batches = t.cat(target_batches, dim=0)
         pred_batches = t.cat(pred_batches, dim=0)
 
-        reward = t.norm(pred_batches - target_batches, dim=-1)
+        intristic_rewards = t.norm(pred_batches - target_batches, dim=-1)
 
         self.update_pred(values)
 
-        return reward * self.beta
+        return intristic_rewards * self.beta
     
     def update_pred(self, values: list):
         self.pred_net.train()
@@ -212,15 +213,15 @@ class RND(nn.Module):
 class PPO:
     def __init__(
             self, has_continuous: bool, action_dim: int, observ_dim: int,  
-            action_scaling: float = None, Actor_lr: float = 0.001, Critic_lr: float = 0.0025, 
+            Actor_lr: float = 0.001, Critic_lr: float = 0.0025, action_scaling: float = None, 
             k_epochs: int = 23, policy_clip: float = 0.2, GAE_lambda: float = 0.95,
             gamma: float = 0.995, batch_size: int = 1024, mini_batch_size: int = 512, 
             use_RND: bool = False, beta: int = None
         ):
 
         # Initializing the most important attributes of PPO.
-        self.policy = ActorCritic(action_scaling, action_dim, observ_dim, has_continuous)
-        self.policy_old = ActorCritic(action_scaling, action_dim, observ_dim, has_continuous)
+        self.policy = ActorCritic(action_dim, observ_dim, has_continuous, action_scaling)
+        self.policy_old = ActorCritic(action_dim, observ_dim, has_continuous, action_scaling)
         if use_RND:
             self.rnd = RND(in_features=observ_dim, out_features=observ_dim, beta=beta)
 
@@ -285,43 +286,16 @@ class PPO:
 
             return action.squeeze(-1).cpu().numpy(), state_value.squeeze(-1).cpu().numpy(), log_prob.squeeze(-1).cpu().numpy()
     
-    def batch_packer(self, values: list, batch_size: int):
-        batch = []
-
-        values = [i.detach().cpu().numpy() for i in values]
-
-        mini_batches = [[] for _ in range(len(values))]
-
-        while len(values[0]) > 0:
-            unique_values_indexes = np.random.choice(a=np.arange(len(values[0])), replace=False, size=np.minimum(len(values[0]), batch_size))
-
-            elements_for_mini_batches = [value[unique_values_indexes] for value in values]
-
-            values = [np.delete(value, unique_values_indexes, axis=0) for value in values]
-
-            [mini_batches[index].append(t.from_numpy(elements_for_mini_batches[index]).to(device)) for index in range(len(values))]
+    def batch_packer(self, values, batch_size: int):
+        if isinstance(values, t.Tensor):
+            batch = list(t.utils.data.DataLoader(values, batch_size))
         
-        [batch.append(mini_batches[index]) for index in range(len(values))]
+        elif isinstance(values, list):
+            batch = [list(t.utils.data.DataLoader(value, batch_size)) for value in values]
 
         return batch
 
-    def single_batch_packer(self, values: t.Tensor, batch_size: int):
-        values = values.detach().cpu().numpy()
-
-        mini_batches = []
-
-        while len(values) > 0:
-            unique_values_indexes = np.random.choice(a=np.arange(len(values)), replace=False, size=np.minimum(len(values), batch_size))
-
-            element_for_mini_batch = values[unique_values_indexes]
-    
-            values = np.delete(values, unique_values_indexes, axis=0)
-
-            mini_batches.append(t.from_numpy(element_for_mini_batch).to(device))
-
-        return mini_batches
-
-    def compute_gae(self, rewards: np.ndarray, dones: np.ndarray, state_values: t.Tensor, next_value: t.Tensor):
+    def compute_gae(self, rewards: np.ndarray, dones: np.ndarray, state_values: np.ndarray, next_value: np.ndarray):
         # Just computing of GAE.
 
         gae = 0
@@ -339,8 +313,8 @@ class PPO:
     def clip_memory(self):
         """This function is needed to prevent the situation 
         where batch_tensor.shape[0] = 1, because if
-        we feed a batch with size 1 into a model with train() mode 
-        we will get an error.
+        we feed a batch with size 1 into a model with enabled the train() mode 
+        we will get the error.
         
         The function takes all lists from self.memory and checks if the length of any list
         is a multiple of batch_size. If any list is bigger than self.batch_size by exactly 1 item, 
@@ -376,7 +350,7 @@ class PPO:
             rewards = (
                 t.from_numpy(np.array(self.memory.rewards)).to(device) + \
                 self.rnd.compute_intristic_reward(
-                    self.single_batch_packer(old_states, self.mini_batch_size)
+                    self.batch_packer(old_states, self.mini_batch_size)
                     )
                 ).cpu().numpy()
 
@@ -387,20 +361,20 @@ class PPO:
         self.memory.clear()
 
         # Computing GAE
-        state_values = t.cat([self.policy.get_value(i).squeeze(dim=-1) for i in self.single_batch_packer(old_states, self.mini_batch_size)], dim=0).detach().cpu().numpy()
+        state_values = t.cat([self.policy.get_value(i) for i in self.batch_packer(old_states, self.mini_batch_size)], dim=0).detach().cpu().numpy()
         next_value = state_values[-1]
         
         returns = self.compute_gae(rewards, dones, state_values, next_value)
-        returns = t.from_numpy(np.array(returns)).to(device)
+        returns = t.from_numpy(np.array(returns)).to(dtype=t.float32, device=device).detach()
 
         advantages = returns - old_state_values # calculate advantage
 
         batches = self.batch_packer([old_states, old_actions, old_log_probs, advantages, returns], batch_size=self.batch_size)
         
         for _ in range(self.k_epochs):
-            for old_states_batches, old_actions_batches, old_log_probs_batches, advantages_batches, returns_batches in zip(*batches):
+            for batch_states, batch_actions, batch_log_probs, batch_advantages, batch_returns in zip(*batches):
 
-                mini_batches = self.batch_packer([old_states_batches, old_actions_batches, old_log_probs_batches, advantages_batches, returns_batches], batch_size=self.mini_batch_size)
+                mini_batches = self.batch_packer([batch_states, batch_actions, batch_log_probs, batch_advantages, batch_returns], batch_size=self.mini_batch_size)
                 
                 for mini_batch_states, mini_batch_actions, mini_batch_log_probs, mini_batch_advantages, mini_batch_returns in zip(*mini_batches):
                     # Collecting log probs, values of states, and dist entropy
