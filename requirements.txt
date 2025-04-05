@@ -1,5 +1,0 @@
-torch==2.5.1+cu124
-numpy==2.2.1
-tqdm==4.67.1
-gymnasium==1.0.0
-matplotlib==3.9.2
