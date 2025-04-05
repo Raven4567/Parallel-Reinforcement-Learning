@@ -22,7 +22,7 @@ class AsyncPPO:
 
 		while True:
 			action, state_value, log_prob = ppo.get_action(
-				t.from_numpy(state)
+				t.from_numpy(state).unsqueeze(0)
 			)
 
 			next_state, reward, done, truncate, _ =  env.step(action)

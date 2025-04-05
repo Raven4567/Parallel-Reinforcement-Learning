@@ -1,5 +1,5 @@
 import torch as t
-from torch import nn, tensor, optim, distributions
+from torch import nn, optim, distributions
 from torch.nn import functional as F
 
 import numpy as np
@@ -38,28 +38,31 @@ class ActorCritic(nn.Module):
         self.has_continuous = has_continuous # discrete or continuous
 
         if self.has_continuous:
-            self.action_scaling = tensor(action_scaling, dtype=t.float32, device=device) # for scaling dist.sample() if you're using continuous PPO
+            self.action_scaling = t.tensor(action_scaling, dtype=t.float32, device=device) # for scaling dist.sample() if you're using continuous PPO
 
-            self.log_of_std = t.log(self.action_scaling)
+            self.log_std = t.log(self.action_scaling)
                 
             self.Actor = nn.Sequential(
                 nn.Linear(observ_dim, 64),
+                nn.GroupNorm(64 // 8, 64),
                 nn.ReLU6(inplace=True),
 
                 nn.Linear(64, 64),
+                nn.GroupNorm(64 // 8, 64),
                 nn.ReLU6(inplace=True),
-                        
             ) # Initialization of actor if you're using continuous PPO
 
             self.mu_layer = nn.Linear(64, action_dim) # mu_layer for getting mean of actions
-            self.log_std = nn.Linear(64, action_dim) # log_std for gettinf log of standard deviation which we predicting
+            self.log_std_layer = nn.Linear(64, action_dim) # log_std for gettinf log of standard deviation which we predicting
 
         else:
             self.Actor = nn.Sequential(
                 nn.Linear(observ_dim, 64),
+                nn.GroupNorm(64 // 8, 64),
                 nn.ReLU6(inplace=True),
 
                 nn.Linear(64, 64),
+                nn.GroupNorm(64 // 8, 64),
                 nn.ReLU6(inplace=True),
 
                 nn.Linear(64, action_dim),
@@ -68,16 +71,18 @@ class ActorCritic(nn.Module):
 
         self.Critic = nn.Sequential(
             nn.Linear(observ_dim, 64),
+            nn.GroupNorm(64 // 8, 64),
             nn.ReLU6(inplace=True),
 
             nn.Linear(64, 64),
+            nn.GroupNorm(64 // 8, 64),
             nn.ReLU6(inplace=True),
 
             nn.Linear(64, 1)
         ) # Critic's initialization
 
         for m in self.modules():
-            if isinstance(m, nn.Conv2d):
+            if isinstance(m, (nn.Conv2d, nn.Conv1d)):
                 nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
@@ -87,14 +92,14 @@ class ActorCritic(nn.Module):
                 if m.bias is not None:
                     nn.init.normal_(m.bias, mean=0, std=0.01)
                     
-            elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d)):
+            elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
         
         # If out sequential model is split up, we unite our parameters of actor, mu_layer, log_std else we just getting Actor.parameters()
         self.Actor_parameters = list(self.Actor.parameters()) + \
                                 list(self.mu_layer.parameters()) + \
-                                list(self.log_std.parameters()) \
+                                list(self.log_std_layer.parameters()) \
                                 if has_continuous else list(self.Actor.parameters())
             
         self.Critic_parameters = list(self.Critic.parameters()) # Critic_parameters for discrete or continuous PPO
@@ -109,7 +114,7 @@ class ActorCritic(nn.Module):
             features = self.Actor(state)
 
             mu = F.tanh(self.mu_layer(features)) * self.action_scaling
-            std = F.softplus(t.clamp(self.log_std(features), min=-self.log_of_std, max=self.log_of_std))
+            std = F.softplus(t.clamp(self.log_std_layer(features), min=-self.log_std, max=self.log_std))
 
             dist = distributions.Normal(mu, std)
         
@@ -122,26 +127,18 @@ class ActorCritic(nn.Module):
     def get_value(self, state: t.Tensor):
         return self.Critic(state).squeeze(-1)
     
-    def get_evaluate(self, state: t.Tensor, action: tensor):
-        if self.has_continuous: # If continuous
-            features = self.Actor(state)
+    def get_evaluate(self, states: t.Tensor, actions: t.Tensor):
+        dist = self.get_dist(states)
 
-            mu = F.tanh(self.mu_layer(features)) * self.action_scaling
-            std = F.softplus(t.clamp(self.log_std(features), min=-self.log_of_std, max=self.log_of_std))
-
-            dist = distributions.Normal(mu, std)
-
-            log_probs = dist.log_prob(action).sum(dim=-1)
-            dist_entropy = dist.entropy().sum(dim=-1)
+        log_probs = dist.log_prob(actions)
+        dist_entropy = dist.entropy()
+        if self.has_continuous:
+            log_probs = log_probs.sum(-1)
+            dist_entropy = dist_entropy.sum(-1)
+        else:
+            pass
         
-        else: # If discrete
-            probs = self.Actor(state)
-            dist = distributions.Categorical(probs)
-
-            log_probs = dist.log_prob(action)
-            dist_entropy = dist.entropy()
-        
-        state_value = self.get_value(state)
+        state_value = self.get_value(states)
 
         return log_probs, state_value, dist_entropy
 
@@ -151,20 +148,24 @@ class RND(nn.Module):
 
         self.target_net = nn.Sequential(
             nn.Linear(in_features, 64),
+            nn.GroupNorm(64 // 8, 64),
             nn.ReLU6(),
+
             nn.Linear(64, out_features)
         )
 
         self.pred_net = nn.Sequential(
             nn.Linear(in_features, 64),
+            nn.GroupNorm(64 // 8, 64),
             nn.ReLU6(),
+
             nn.Linear(64, out_features)
         )
         
         for param in self.target_net.parameters():
             param.requires_grad = False
 
-        self.beta = tensor([beta], dtype=t.float32, device=device)
+        self.beta = t.tensor([beta], dtype=t.float32, device=device)
         self.k_epochs = k_epochs
 
         self.loss_fn = nn.MSELoss()
@@ -214,7 +215,7 @@ class PPO:
     def __init__(
             self, has_continuous: bool, action_dim: int, observ_dim: int,  
             Actor_lr: float = 0.001, Critic_lr: float = 0.0025, action_scaling: float = None, 
-            k_epochs: int = 23, policy_clip: float = 0.2, GAE_lambda: float = 0.95,
+            k_epochs: int = 21, policy_clip: float = 0.2, GAE_lambda: float = 0.95,
             gamma: float = 0.995, batch_size: int = 1024, mini_batch_size: int = 512, 
             use_RND: bool = False, beta: int = None
         ):
@@ -269,22 +270,22 @@ class PPO:
         self.action_dim = action_dim
         self.observ_dim = observ_dim
 
+    @t.no_grad()
     def get_action(self, state: t.Tensor):
         state = state.to(dtype=t.float32, device=device) # Transform numpy state to tensor state
+        
+        dist = self.policy_old.get_dist(state)
 
-        with t.no_grad(): # torch.no_grad() for economy of resource
-            dist = self.policy_old.get_dist(state)
+        action = dist.sample()
+        if self.has_continuous:
+            action = t.tanh(action) * self.action_scaling
+            log_prob = dist.log_prob(action).sum(-1)
+        else:
+            log_prob = dist.log_prob(action)
 
-            action = dist.sample()
-            if self.has_continuous:
-                action = t.tanh(action) * self.action_scaling
-                log_prob = dist.log_prob(action).sum(-1)
-            else:
-                log_prob = dist.log_prob(action)
+        state_value = self.policy_old.get_value(state)
 
-            state_value = self.policy_old.get_value(state)
-
-            return action.squeeze(-1).cpu().numpy(), state_value.squeeze(-1).cpu().numpy(), log_prob.squeeze(-1).cpu().numpy()
+        return action.squeeze(0).cpu().numpy(), state_value.squeeze(0).cpu().numpy(), log_prob.squeeze(0).cpu().numpy()
     
     def batch_packer(self, values, batch_size: int):
         if isinstance(values, t.Tensor):
@@ -310,36 +311,9 @@ class PPO:
 
         return returns
 
-    def clip_memory(self):
-        """This function is needed to prevent the situation 
-        where batch_tensor.shape[0] = 1, because if
-        we feed a batch with size 1 into a model with enabled the train() mode 
-        we will get the error.
-        
-        The function takes all lists from self.memory and checks if the length of any list
-        is a multiple of batch_size. If any list is bigger than self.batch_size by exactly 1 item, 
-        then the last item is deleted."""
-        
-        values = self.memory.states, self.memory.actions, self.memory.log_probs, self.memory.rewards, self.memory.dones, self.memory.state_values
-
-        new_values = []
-        for single_list in values:
-            # Check if the length of the list is a multiple of batch_size
-            if (len(single_list)-1) % self.batch_size == 0:
-                # If it is, remove the last element
-                new_values.append(single_list[:-1])
-            
-            else:
-                # If it is not, do nothing
-                new_values.append(single_list)
-        
-        self.memory.states, self.memory.actions, self.memory.log_probs, self.memory.rewards, self.memory.dones, self.memory.state_values = new_values
-
     def education(self):
         if len(self.memory.states) < self.batch_size:
             return 
-
-        self.clip_memory()
 
         old_states = t.from_numpy(np.array(self.memory.states)).to(device).detach()
         old_actions = t.from_numpy(np.array(self.memory.actions)).to(device).detach()
@@ -361,7 +335,7 @@ class PPO:
         self.memory.clear()
 
         # Computing GAE
-        state_values = t.cat([self.policy.get_value(i) for i in self.batch_packer(old_states, self.mini_batch_size)], dim=0).detach().cpu().numpy()
+        state_values = old_state_values.cpu().numpy()
         next_value = state_values[-1]
         
         returns = self.compute_gae(rewards, dones, state_values, next_value)
@@ -402,19 +376,19 @@ class PPO:
 
         self.policy_old.load_state_dict(self.policy.state_dict()) # load parameters of policy to policy_old
 
-    def load_weights(self, storage_path: str):
+    def load_weights(self):
         try:
-            self.policy.load_state_dict(t.load(storage_path+'/Policy_weights.pth', weights_only=True))
+            self.policy.load_state_dict(t.load('./Policy_weights.pth', weights_only=True))
             self.policy_old.load_state_dict(self.policy.state_dict())
             
             if self.use_RND:            
-                self.rnd.load_state_dict(t.load(storage_path+'/RND_weights.pth', weights_only=True))
+                self.rnd.load_state_dict(t.load('./RND_weights.pth', weights_only=True))
 
         except FileNotFoundError:
             pass
     
-    def save_weights(self, storage_path: str):
-        t.save(self.policy.state_dict(), storage_path+'/Policy_weights.pth')
+    def save_weights(self):
+        t.save(self.policy.state_dict(), './Policy_weights.pth')
 
         if self.use_RND:
-            t.save(self.rnd.state_dict(), storage_path+'/RND_weights.pth')
+            t.save(self.rnd.state_dict(), './RND_weights.pth')
