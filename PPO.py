@@ -311,7 +311,7 @@ class PPO:
 
         return returns
 
-    def education(self):
+    def learn(self):
         if len(self.memory.states) < self.batch_size:
             return 
 

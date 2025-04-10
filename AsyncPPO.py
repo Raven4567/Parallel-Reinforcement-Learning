@@ -62,7 +62,7 @@ class AsyncPPO:
 				for batch in single_buffer:
 					self.ppo.memory.push(*batch)
 
-			self.ppo.education()
+			self.ppo.learn()
 			#self.ppo.save_weights('code/Works/PPO_PRL')
 
 			pbar.update(sum(steps_score))
