@@ -1,37 +1,149 @@
 # Parallel-Reinforcement-Learning
 
-## The PPO parameters
+**Languages:** [English](README.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [中文](README.zh-CN.md)
+
+## Description
+Small program that makes PPO learn using many enviroments at the same time, anyschronously, accelerating the learning and exploration.
+
+## Installation 
+run:
+```
+git clone https://github.com/Raven4567/Parallel-Reinforcement-Learning
+```
+then run:
+```
+pip install -r requirements.txt
+```
+being in the installed `Parallel-Reinforcement-Learning` folder.
+
+## Quick start
 ```python
-has_continuous: bool  # Whether the gym environment is discrete or continuous
+from PPO import PPO
+from AsyncPPO import AsyncPPO
 
-action_dim: int  # Number of possible actions
+import gymnasium as gym
 
-observ_dim: int  # Number of environment features
+if __name__ == '__main__':
+	env = gym.make('CartPole-v1', max_episode_steps=500)
 
-action_scaling: float = None  # For example, if the range of actions is from -2 to 2, but our network outputs actions in the range of -1 to 1, we multiply the actions by action_scaling.
+	ppo = PPO(
+		is_continuous=False, action_dim=env.action_space.n, observ_dim=env.observation_space.shape[0],
+		Actor_lr=0.0010, Critic_lr=0.0025, # action_scaling=2.0
+		policy_clip=0.2, k_epochs=11, GAE_lambda=0.95, 
+		batch_size=1024, mini_batch_size=1024, gamma=0.995,
+		# use_RND=True, beta=0.01
+	)
 
-actor_lr: float = 0.001  # Actor's optimizer learning rate
+	async_ppo = AsyncPPO(
+		env=env,
+		ppo=ppo,
+		num_envs=32,
+		steps=1000000
+	)
 
-critic_lr: float = 0.0025  # Critic's optimizer learning rate
+	async_ppo.run()
 
-k_epochs: int = 23  # Number of epochs for updating PPO policies
-
-policy_clip: float = 0.2  # The limit on policy updates
-
-GAE_lambda: float = 0.95
-
-gamma: float = 0.995  # This controls the focus on long-term rewards. If it's lower, the agent focuses on short-term rewards, and if it's higher, the agent focuses on long-term rewards. Typically between 0.9 and 0.999.
-
-batch_size: int = 1024  # Size of the batch
-
-mini_batch_size: int = 512  # Size of the mini-batch
-
-use_RND: bool = False  # Whether to use RND (Random Network Distillation)
-
-beta: int = None  # Impact of RND's rewards
+	async_ppo.ppo.save_weights(path='(insert your path)/PPO_PRL/PPO/data/')
 ```
 
-**Read more: [The explanation of RND](https://openai.com/index/reinforcement-learning-with-prediction-based-rewards/#main)**
+`PPO` parameters:
 
-## Why Threading?
-In this code, I use Python's `threading` because it is **cheap** and *doesn’t introduce the overhead that processes do, such as the communication and synchronization of network weights between processes.* Processes work at the same speed and **don’t face the data race problem**. However, `PyTorch` is thread-safe, **so even with dozens of environments, it doesn’t cause data race problems.** As mentioned, `threading` avoids the overhead because it *uses one interpreter*. Using a single interpreter may slow down execution, but we prefer `threading` over `multiprocessing` because it's lighter than independent processes, with threads sharing **one memory** and **one model.**
+- `is_continuous` - set True if the environment demands continuous actions (False means discrete actions, and True means continuous ones)
+- `action_dim`  - number of possible actions (e. g. `action_dim=2` for CartPole-v1 or `action_dim=23` for Pusher-v5)
+- `observ_dim` - number of state features (e. g. `observ_dim=4` for CartPole-v1 or `observ_dim=348` for Humanoid-v5)
+- `Actor_lr` - value of lr for Actor network
+- `Critic_lr ` - value of lr for Critic network
+- `action_scaling` - multiplier for actions, for example for Pusher-v5 we've to use `action_scaling=2.0` because the range of actions in Pusher-v5 is (-2, 2) and our network outputs only (-1, 1) actions if `is_continuous=True`, so it uses `action_scaling` for scaling of actions towards the right range.
+- `policy_clip` - value of policy changes, e. g. `policy_clip=0.2` allows changes not more than 20%
+- `k_epochs` - number of epochs for network learning on one set of data.
+- `GAE_lambda` - smoothing factor for advantage calculation (0 = high variance, 1 = lower variance).
+- `batch_size` - batch size
+- `mini_batch_size` - mini-batch size
+- `gamma` - affects the consideration of long-term rewards (usually 0.99-0.999)
+- `use_RND` - whether we'll be using `Random Network Distillation`
+- `beta` - multiplier for `RND` rewards
+
+More about RND - https://openai.com/index/reinforcement-learning-with-prediction-based-rewards/
+
+## Custom loop
+
+**WARNING**: the line `env.envs_active = utils.update_active_environments_list(env.envs_active, dones | truncates)` is most important, lack of it will break the learning.
+
+Also in this example I'll be using my own implementation, but feel free to copy this code and rewrite it for your implementation.
+
+```python
+# Import
+from PPO import PPO
+from AsyncPPO import EnvVectorizer, VecMemory
+
+import utils
+
+import torch as t
+import numpy as np
+
+from tqdm import tqdm
+
+import gymnasium as gym
+
+# Main loop
+if __name__ == '__main__':
+	# Create environment
+	env = gym.make('CartPole-v1')
+
+	# Initialise neural network (or your own implementation)
+	ppo = PPO(
+		is_continuous=False, action_dim=env.action_space.n, observ_dim=env.observation_space.shape[0],
+		Actor_lr=0.0010, Critic_lr=0.0025,# action_scaling=1.0,
+		policy_clip=0.2, k_epochs=11, GAE_lambda=0.95, 
+		batch_size=1024, mini_batch_size=1024, gamma=0.995,
+		use_RND=True, beta=0.01
+	)
+
+	env = EnvVectorizer(env=env, num_envs=32) # Vectorised env
+	buffer = VecMemory(num_envs=32) # Vectorized buffer with one buffer for every env
+
+	# Data collecting loop with tqdm progress bar
+	for _ in (pbar := tqdm(range(200))):
+		states = env.reset()[0] # Get states
+
+		rewards_score = np.array(0.) # Reset rewards score
+		steps_score = np.array(0) # Reset steps score
+
+		while True:
+			# Get actions, state values, and log probabilities
+			actions, state_values, log_probs = ppo.get_action(t.from_numpy(states)) 
+
+			# Execute steps
+			next_states, rewards, dones, truncates, _ = env.step(actions) 
+
+			# Append data in our AsyncPPO.VecMemory buffer
+			utils.buffer_append(
+				buffer,
+
+				states, 
+				actions, 
+				rewards, 
+				dones, 
+				state_values, 
+				log_probs,
+
+				is_env_terminal=env.envs_active,
+				num_envs=32
+			) 
+
+			# Sifting states with done or truncate = True features, and also update envs activity list
+			states = utils.inactive_states_dropout(states, dones | truncates) 
+			env.envs_active = utils.update_active_environments_list(env.envs_active, dones | truncates)
+
+			rewards_score += sum(rewards) # Update rewards score
+			steps_score += len(actions) # Update steps score
+
+			# If all environments are terminal we finish the episode
+			if np.all(env.envs_active): 
+				# Transfer data from our local buffer to ppo.memory buffer for ppo learning. You also can use your own function for transfer data in your own neural network buffer.
+				utils.buffer_to_target_buffer_transfer(buffer, ppo.memory) 
+				
+				ppo.learn() # Launch the learning function
+
+				break # Get out from the episode and start new one
+```
