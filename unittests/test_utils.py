@@ -32,8 +32,8 @@ class TestUtils(unittest.TestCase):
             actions=np.random.randint(0, 2, size=4),
             rewards=np.random.randn(4),
             dones=np.random.choice([False, True], size=4),
-            state_values=np.random.randn(4),
-            log_probs=np.random.randn(4),
+            # state_values=np.random.randn(4),
+            # log_probs=np.random.randn(4),
 
             is_env_terminal=np.random.choice([False, True], size=4),
             num_envs=4
@@ -54,12 +54,12 @@ class TestUtils(unittest.TestCase):
             buffer.actions[i] = [np.random.randint(0, 2) for _ in range(random_length)]
             buffer.rewards[i] = [np.random.randn() for _ in range(random_length)]
             buffer.dones[i] = [np.random.choice([False, True]) for _ in range(random_length)]
-            buffer.state_values[i] = [np.random.randn() for _ in range(random_length)]
-            buffer.log_probs[i] = [np.random.randn() for _ in range(random_length)]
+            # buffer.state_values[i] = [np.random.randn() for _ in range(random_length)]
+            # buffer.log_probs[i] = [np.random.randn() for _ in range(random_length)]
 
         utils.buffer_to_target_buffer_transfer(
             buffer,
-            target_buffer=Memory()
+            target_buffer = Memory()
         )
 
 if __name__ == '__main__':

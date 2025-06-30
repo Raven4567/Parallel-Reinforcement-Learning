@@ -14,27 +14,25 @@ device = t.device('cuda' if t.cuda.is_available() else 'cpu')
 
 class TestPPO_Discrete(unittest.TestCase):
     def setUp(self):
-        self.ppo = PPO(is_continuous=False, action_dim=2, observ_dim=4, action_scaling=None)
+        self.ppo = PPO(is_continuous=False, observ_dim=4, action_dim=2)
     
         # Dummy dataset
         for i in range(100):
             self.ppo.memory.push(
                 state=np.random.randn(4),
-                action=np.random.randint(0, 2),
-                reward=np.random.rand(),
+                action=np.random.randint(0, 2, size=(1,)),
+                reward=np.random.rand(1),
                 done=np.random.choice([True, False]),
-                state_value=np.random.rand(),
-                log_prob=np.random.rand()
+                # state_value=np.random.rand(),
+                # log_prob=np.random.rand()
             )
     
     def test_get_action(self):
-        actions, state_values, log_probs = self.ppo.get_action(
+        actions = self.ppo.get_action(
             t.from_numpy(np.random.randn(1, 4))
         )
 
         self.assertEqual(actions.shape, (1,))
-        self.assertEqual(state_values.shape, (1,))
-        self.assertEqual(log_probs.shape, (1,))
     
     def test_batch_packer(self):
         dummy_values = t.randn(224, 4)
@@ -54,27 +52,26 @@ class TestPPO_Discrete(unittest.TestCase):
 
 class TestPPO_Continuous(unittest.TestCase):
     def setUp(self):
-        self.ppo = PPO(is_continuous=True, action_dim=2, observ_dim=4, action_scaling=2.0)
+        self.ppo = PPO(is_continuous=True, observ_dim=4, action_dim=2, action_scaling=1.0)
     
         # Dummy dataset
         for i in range(100):
             self.ppo.memory.push(
                 state=np.random.randn(4),
-                action=np.random.randint(2),
-                reward=np.random.rand(),
+                action=np.random.randint(0, 2, size=(1,)),
+                reward=np.random.rand(1),
                 done=np.random.choice([True, False]),
-                state_value=np.random.rand(),
-                log_prob=np.random.rand()
+                # state_value=np.random.rand(),
+                # log_prob=np.random.rand()
             )
     
     def test_get_action(self):
-        actions, state_values, log_probs = self.ppo.get_action(
+        actions = self.ppo.get_action(
             t.randn(1, 4)
         )
 
         self.assertEqual(actions.shape, (1, self.ppo.action_dim,))
-        self.assertEqual(state_values.shape, (1,))
-        self.assertEqual(log_probs.shape, (1,))
+        self.assertEqual(actions.dtype, np.float32)
     
     def test_batch_packer(self):
         dummy_values = t.randn(224, 4)
@@ -94,7 +91,7 @@ class TestPPO_Continuous(unittest.TestCase):
 
 class TestActorCriticDiscrete(unittest.TestCase):
     def setUp(self):
-        self.actorcritic = ActorCritic(2, 4, is_continuous=False, action_scaling=None)
+        self.actorcritic = ActorCritic(is_continuous=False, observ_dim=4, action_dim=2)
     
     def test_get_dist(self):
         self.actorcritic.get_dist(
@@ -114,7 +111,7 @@ class TestActorCriticDiscrete(unittest.TestCase):
 
 class TestActorCriticContinuous(unittest.TestCase):
     def setUp(self):
-        self.actorcritic = ActorCritic(2, 4, is_continuous=True, action_scaling=1)
+        self.actorcritic = ActorCritic(is_continuous=True, observ_dim=4, action_dim=2)
     
     def test_get_dist(self):
         self.actorcritic.get_dist(
@@ -134,7 +131,7 @@ class TestActorCriticContinuous(unittest.TestCase):
 
 class TestRND(unittest.TestCase):
     def setUp(self):
-        self.rnd = RND(4, 4, beta=0.01, k_epochs=1)
+        self.rnd = RND(4, 4, beta=0.001)
     
     def test_compute_intristic_reward(self):
         states = t.randn(32, 4).to(device)
@@ -143,7 +140,7 @@ class TestRND(unittest.TestCase):
             batch_size=16
         )
 
-        intrinsic_reward = self.rnd.compute_intristic_reward(values)
+        intrinsic_reward = self.rnd.compute_intrinsic_reward(values)
 
         self.assertEqual(intrinsic_reward.shape, (32,))
     
@@ -164,21 +161,21 @@ class TestMemory(unittest.TestCase):
         for i in range(100):
             self.memory.push(
                 state=np.random.randn(4),
-                action=np.random.randint(0, 2),
-                reward=np.random.randn(),
+                action=np.random.randint(0, 2, size=(1,)),
+                reward=np.random.rand(1),
                 done=np.random.choice([True, False]),
-                state_value=np.random.rand(),
-                log_prob=np.random.rand()
+                # state_value=np.random.rand(),
+                # log_prob=np.random.rand()
             )
 
     def test_push(self):
         self.memory.push(
             state=np.random.randn(4),
-            action=np.random.randint(0, 2),
-            reward=np.random.randn(),
+            action=np.random.randint(0, 2, size=(1,)),
+            reward=np.random.rand(1),
             done=np.random.choice([True, False]),
-            state_value=np.random.rand(),
-            log_prob=np.random.rand()
+            # state_value=np.random.rand(),
+            # log_prob=np.random.rand()
         )
     
     def test_clear(self):

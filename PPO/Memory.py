@@ -10,21 +10,15 @@ class Memory:
         self.actions = []
         self.rewards = []
         self.dones = []
-        self.state_values = []
-        self.log_probs = []
     
-    def push(self, state, action, reward, done, state_value, log_prob):
-        self.states.append(np.array(state, dtype=np.float32))
-        self.actions.append(np.array(action, dtype=np.float32))
-        self.rewards.append(np.array(reward, dtype=np.float32))
-        self.dones.append(np.array(done, dtype=np.float32))
-        self.state_values.append(np.array(state_value, dtype=np.float32))
-        self.log_probs.append(np.array(log_prob, dtype=np.float32))
+    def push(self, state: np.ndarray, action: np.ndarray, reward: np.ndarray, done: np.ndarray):
+        self.states.append(state.astype(np.float32))
+        self.actions.append(action.astype(np.float32))
+        self.rewards.append(reward.astype(np.float32))
+        self.dones.append(done.astype(np.float32))
     
     def clear(self):
         del self.states[:]
         del self.actions[:]
         del self.rewards[:]
         del self.dones[:]
-        del self.state_values[:]
-        del self.log_probs[:]

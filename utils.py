@@ -11,8 +11,8 @@ def range_of_active_environments(is_env_terminal: np.ndarray):
         number_of_active_environments(is_env_terminal)
     )
 
-def inactive_states_dropout(next_states: np.ndarray, dones: np.ndarray):
-    return next_states[~dones]
+def inactive_states_dropout(states: np.ndarray, dones: np.ndarray):
+    return states[~dones]
 
 def buffer_append(
         # buffer (usually multiple lists for each env)
@@ -23,8 +23,6 @@ def buffer_append(
         actions: np.ndarray, 
         rewards: np.ndarray, 
         dones: np.ndarray, 
-        state_values: np.ndarray, 
-        log_probs: np.ndarray,
 
         # envs active
         is_env_terminal: np.ndarray,
@@ -35,7 +33,7 @@ def buffer_append(
     idx = indexes_of_active_environments(num_envs, is_env_terminal)
 
     for i_, idx_ in zip(i, idx):
-        buffer.push(idx_, states[i_], actions[i_], rewards[i_], dones[i_], state_values[i_], log_probs[i_])
+        buffer.push(idx_, states[i_], actions[i_], rewards[i_], dones[i_])
 
 def update_active_environments_list(is_env_terminal: np.ndarray, dones: np.ndarray):
     active_indexes = np.where(~is_env_terminal)[0]
@@ -45,9 +43,9 @@ def update_active_environments_list(is_env_terminal: np.ndarray, dones: np.ndarr
     return is_env_terminal
 
 def buffer_to_target_buffer_transfer(buffer, target_buffer):
-    target_buffer.states = sum(buffer.states, [])
-    target_buffer.actions = sum(buffer.actions, [])
-    target_buffer.rewards = sum(buffer.rewards, [])
-    target_buffer.dones = sum(buffer.dones, [])
-    target_buffer.state_values = sum(buffer.state_values, [])
-    target_buffer.log_probs = sum(buffer.log_probs, [])
+    target_buffer.states += sum(buffer.states, [])
+    target_buffer.actions += sum(buffer.actions, [])
+    target_buffer.rewards += sum(buffer.rewards, [])
+    target_buffer.dones += sum(buffer.dones, [])
+
+    buffer.clear()

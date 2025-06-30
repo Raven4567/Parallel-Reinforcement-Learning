@@ -16,11 +16,11 @@ class TestVecMemory(unittest.TestCase):
     def setUp(self):
         # Dummy data
         self.state = np.random.randn(1)
-        self.action = np.random.randint(0, 2)
-        self.reward = np.random.rand()
+        self.action = np.random.randint(0, 2, size=(1,))
+        self.reward = np.random.rand(1)
         self.done = np.random.choice([True, False])
-        self.state_value = np.random.randn(4)
-        self.log_prob = np.random.rand()
+        # self.state_value = np.random.randn(4)
+        # self.log_prob = np.random.rand()
     
         self.memory = AsyncPPO.VecMemory(num_envs=4)
 
@@ -31,8 +31,8 @@ class TestVecMemory(unittest.TestCase):
             action=self.action,
             reward=self.reward,
             done=self.done,
-            state_value=self.state_value,
-            log_prob=self.log_prob
+            # state_value=self.state_value,
+            # log_prob=self.log_prob
         )
     
     def test_clear(self):

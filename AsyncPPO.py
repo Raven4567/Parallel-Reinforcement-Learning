@@ -9,29 +9,28 @@ from copy import deepcopy
 import utils
 
 class VecMemory:
-    def __init__(self, num_envs: int):
-        self.states = [[] for _ in range(num_envs)]
-        self.actions = [[] for _ in range(num_envs)]
-        self.rewards = [[] for _ in range(num_envs)]
-        self.dones = [[] for _ in range(num_envs)]
-        self.state_values = [[] for _ in range(num_envs)]
-        self.log_probs = [[] for _ in range(num_envs)]
-    
-    def push(self, idx: int, state, action, reward, done, state_value, log_prob):
-        self.states[idx].append(np.array(state, dtype=np.float32))
-        self.actions[idx].append(np.array(action, dtype=np.float32))
-        self.rewards[idx].append(np.array(reward, dtype=np.float32))
-        self.dones[idx].append(np.array(done, dtype=np.float32))
-        self.state_values[idx].append(np.array(state_value, dtype=np.float32))
-        self.log_probs[idx].append(np.array(log_prob, dtype=np.float32))
-    
-    def clear(self):
-        del self.states[:]
-        del self.actions[:]
-        del self.rewards[:]
-        del self.dones[:]
-        del self.state_values[:]
-        del self.log_probs[:]
+	def __init__(self, num_envs: int):
+		self.states = [[] for _ in range(num_envs)]
+		self.actions = [[] for _ in range(num_envs)]
+		self.rewards = [[] for _ in range(num_envs)]
+		self.dones = [[] for _ in range(num_envs)]
+		# self.state_values = [[] for _ in range(num_envs)]
+		# self.log_probs = [[] for _ in range(num_envs)]
+	
+	def push(self, idx: int, state, action, reward, done):
+		self.states[idx].append(state.astype(np.float32))
+		self.actions[idx].append(action.astype(np.float32))
+		self.rewards[idx].append(reward.astype(np.float32))
+		self.dones[idx].append(done.astype(np.float32))
+
+	def clear(self):
+		for i in range(len(self.states)):
+			del self.states[i][:]	
+			del self.actions[i][:]	
+			del self.rewards[i][:]	
+			del self.dones[i][:]	
+			# del self.state_values[i][:]
+			# del self.log_probs[i][:]
 
 class EnvVectorizer(gym.Env):
 	def __init__(self, env: gym.Env, num_envs: int = 1):
@@ -119,7 +118,7 @@ class AsyncPPO:
 		states = self.env.reset()[0]
 
 		while True:
-			actions, state_values, log_probs = self.ppo.get_action(t.from_numpy(states))
+			actions = self.ppo.get_action(t.from_numpy(states))
 
 			next_states, rewards, dones, truncates, _ =  self.env.step(actions)
 
@@ -129,9 +128,7 @@ class AsyncPPO:
 				states, 
 				actions, 
 				rewards, 
-				dones, 
-				state_values, 
-				log_probs,
+				dones,
 			
 				self.env.envs_active,
 				self.num_envs

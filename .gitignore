@@ -1,2 +1,5 @@
-.vscode
 .gitignore
+.vscode
+*__pycache__
+Policy_weights.pth
+RND_weights.pth

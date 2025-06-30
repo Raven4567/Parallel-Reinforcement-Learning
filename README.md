@@ -14,7 +14,7 @@ then run:
 ```
 pip install -r requirements.txt
 ```
-being in the installed `Parallel-Reinforcement-Learning` folder.
+being in the installed `.../Parallel-Reinforcement-Learning` folder.
 
 ## Quick start
 ```python
@@ -27,32 +27,39 @@ if __name__ == '__main__':
 	env = gym.make('CartPole-v1', max_episode_steps=500)
 
 	ppo = PPO(
-		is_continuous=False, action_dim=env.action_space.n, observ_dim=env.observation_space.shape[0],
-		Actor_lr=0.0010, Critic_lr=0.0025, # action_scaling=2.0
-		policy_clip=0.2, k_epochs=11, GAE_lambda=0.95, 
-		batch_size=1024, mini_batch_size=1024, gamma=0.995,
-		# use_RND=True, beta=0.01
+		is_continuous=False, 
+		observ_dim=env.observation_space.shape[0],
+		action_dim=env.action_space.n, 
+		lr=0.001, 
+		# action_scaling=2.0
+		policy_clip=0.2, 
+		k_epochs=11, 
+		GAE_lambda=0.95, 
+		batch_size=1024, 
+		mini_batch_size=512, 
+		gamma=0.995,
+		# use_RND=True, 
+		# beta=0.001
 	)
 
 	async_ppo = AsyncPPO(
 		env=env,
 		ppo=ppo,
 		num_envs=32,
-		steps=1000000
+		steps=100000
 	)
 
 	async_ppo.run()
 
-	async_ppo.ppo.save_weights(path='(insert your path)/PPO_PRL/PPO/data/')
+	async_ppo.ppo.save_weights(path='(insert your path)/Parallel-Reinforcement-Learning/PPO/data')
 ```
 
-`PPO` parameters:
+## `PPO` parameters:
 
 - `is_continuous` - set True if the environment demands continuous actions (False means discrete actions, and True means continuous ones)
-- `action_dim`  - number of possible actions (e. g. `action_dim=2` for CartPole-v1 or `action_dim=23` for Pusher-v5)
 - `observ_dim` - number of state features (e. g. `observ_dim=4` for CartPole-v1 or `observ_dim=348` for Humanoid-v5)
-- `Actor_lr` - value of lr for Actor network
-- `Critic_lr ` - value of lr for Critic network
+- `action_dim`  - number of possible actions (e. g. `action_dim=2` for CartPole-v1 or `action_dim=23` for Pusher-v5)
+- `lr` - value of learning rate for optimizer.
 - `action_scaling` - multiplier for actions, for example for Pusher-v5 we've to use `action_scaling=2.0` because the range of actions in Pusher-v5 is (-2, 2) and our network outputs only (-1, 1) actions if `is_continuous=True`, so it uses `action_scaling` for scaling of actions towards the right range.
 - `policy_clip` - value of policy changes, e. g. `policy_clip=0.2` allows changes not more than 20%
 - `k_epochs` - number of epochs for network learning on one set of data.
@@ -60,14 +67,14 @@ if __name__ == '__main__':
 - `batch_size` - batch size
 - `mini_batch_size` - mini-batch size
 - `gamma` - affects the consideration of long-term rewards (usually 0.99-0.999)
-- `use_RND` - whether we'll be using `Random Network Distillation`
+- `use_RND` - whether we'll be using *Random Network Distillation*.
 - `beta` - multiplier for `RND` rewards
 
 More about RND - https://openai.com/index/reinforcement-learning-with-prediction-based-rewards/
 
 ## Custom loop
 
-**WARNING**: the line `env.envs_active = utils.update_active_environments_list(env.envs_active, dones | truncates)` is most important, lack of it will break the learning.
+**WARNING**: the line `env.envs_active = utils.update_active_environments_list(env.envs_active, dones | truncates)` and `states = utils.inactive_states_dropout(next_states, dones | truncates)` are most important, lack of them will break the learning.
 
 Also in this example I'll be using my own implementation, but feel free to copy this code and rewrite it for your implementation.
 
@@ -92,18 +99,31 @@ if __name__ == '__main__':
 
 	# Initialise neural network (or your own implementation)
 	ppo = PPO(
-		is_continuous=False, action_dim=env.action_space.n, observ_dim=env.observation_space.shape[0],
-		Actor_lr=0.0010, Critic_lr=0.0025,# action_scaling=1.0,
-		policy_clip=0.2, k_epochs=11, GAE_lambda=0.95, 
-		batch_size=1024, mini_batch_size=1024, gamma=0.995,
-		use_RND=True, beta=0.01
+		is_continuous=False, 
+		observ_dim=env.observation_space.shape[0],
+		action_dim=env.action_space.n, 
+		lr=0.001,
+		# action_scaling=1.0,
+		policy_clip=0.2, 
+		k_epochs=11, 
+		GAE_lambda=0.95, 
+		batch_size=1024, 
+		mini_batch_size=512, 
+		gamma=0.995,
+		use_RND=True, 
+		beta=0.001
 	)
 
 	env = EnvVectorizer(env=env, num_envs=32) # Vectorised env
 	buffer = VecMemory(num_envs=32) # Vectorized buffer with one buffer for every env
 
 	# Data collecting loop with tqdm progress bar
-	for _ in (pbar := tqdm(range(200))):
+	pbar = tqdm(
+		total=100000,
+		unit='step'
+	)
+
+	while pbar.n < pbar.total:
 		states = env.reset()[0] # Get states
 
 		rewards_score = np.array(0.) # Reset rewards score
@@ -111,7 +131,7 @@ if __name__ == '__main__':
 
 		while True:
 			# Get actions, state values, and log probabilities
-			actions, state_values, log_probs = ppo.get_action(t.from_numpy(states)) 
+			actions = ppo.get_action(t.from_numpy(states)) 
 
 			# Execute steps
 			next_states, rewards, dones, truncates, _ = env.step(actions) 
@@ -123,27 +143,27 @@ if __name__ == '__main__':
 				states, 
 				actions, 
 				rewards, 
-				dones, 
-				state_values, 
-				log_probs,
+				dones,
 
 				is_env_terminal=env.envs_active,
 				num_envs=32
 			) 
 
 			# Sifting states with done or truncate = True features, and also update envs activity list
-			states = utils.inactive_states_dropout(states, dones | truncates) 
+			states = utils.inactive_states_dropout(next_states, dones | truncates) 
 			env.envs_active = utils.update_active_environments_list(env.envs_active, dones | truncates)
 
 			rewards_score += sum(rewards) # Update rewards score
-			steps_score += len(actions) # Update steps score
+			steps_score += sum(~env.envs_active) # Update steps score
 
 			# If all environments are terminal we finish the episode
 			if np.all(env.envs_active): 
 				# Transfer data from our local buffer to ppo.memory buffer for ppo learning. You also can use your own function for transfer data in your own neural network buffer.
 				utils.buffer_to_target_buffer_transfer(buffer, ppo.memory) 
-				
 				ppo.learn() # Launch the learning function
+
+				pbar.set_description(f'Mean reward {rewards_score / 32: .1f}')
+				pbar.update(min(pbar.total - pbar.n, steps_score))
 
 				break # Get out from the episode and start new one
 ```

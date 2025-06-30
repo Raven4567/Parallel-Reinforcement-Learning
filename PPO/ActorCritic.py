@@ -3,61 +3,48 @@ from torch import nn, distributions
 
 import torch.nn.functional as F
 
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+
+import utils
+
 device = t.device('cuda' if t.cuda.is_available() else 'cpu')
 
 class ActorCritic(nn.Module):
-    def __init__(self, action_dim: int, observ_dim: int, is_continuous: bool, action_scaling: float):
+    def __init__(self, is_continuous: bool, observ_dim: int, action_dim: int):
         super().__init__()
 
         self.is_continuous = is_continuous # discrete or continuous
 
+        self.model = nn.Sequential(
+            nn.Linear(observ_dim, 64, bias=False),
+            nn.GroupNorm(64 // 8, 64),
+            nn.SiLU(inplace=True),
+
+            nn.Linear(64, 64, bias=False),
+            nn.GroupNorm(64 // 8, 64),
+            nn.SiLU(inplace=True),
+
+        )
+
         if self.is_continuous:
-            self.action_scaling = t.tensor(action_scaling, dtype=t.float32, device=device) # for scaling dist.sample() if you're using continuous PPO
-
-            self.log_std = t.log(self.action_scaling / 4)
-                
-            self.Actor = nn.Sequential(
-                nn.Linear(observ_dim, 64),
-                nn.GroupNorm(64 // 8, 64),
-                nn.SiLU(inplace=True),
-
-                # nn.Linear(64, 64),
-                # nn.GroupNorm(64 // 8, 64),
-                # nn.SiLU(inplace=True),
-
-            ) # Initialization of actor if you're using continuous PPO
-
             self.mu_head = nn.Linear(64, action_dim) # mu_head for getting mean of actions
             self.log_std_head = nn.Linear(64, action_dim) # log_std for gettinf log of standard deviation which we predicting
 
         else:
-            self.Actor = nn.Sequential(
-                nn.Linear(observ_dim, 64),
-                nn.GroupNorm(64 // 8, 64),
-                nn.SiLU(inplace=True),
-
-                # nn.Linear(64, 64),
-                # nn.GroupNorm(64 // 8, 64),
-                # nn.SiLU(inplace=True),
-
+            self.actor = nn.Sequential(
                 nn.Linear(64, action_dim),
                 nn.Softmax(dim=-1)
             ) # Initialization of actor if you're using discrete PPO
 
-        self.Critic = nn.Sequential(
-            nn.Linear(observ_dim, 64),
-            nn.GroupNorm(64 // 8, 64),
-            nn.SiLU(inplace=True),
-
-            # nn.Linear(64, 64),
-            # nn.GroupNorm(64 // 8, 64),
-            # nn.SiLU(inplace=True),
-
+        self.critic = nn.Sequential(
             nn.Linear(64, 1)
-        ) # Critic's initialization
+        ) # critic's initialization
 
         for m in self.modules():
-            if isinstance(m, (nn.Conv3d, nn.Conv2d, nn.Conv1d)):
+            if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
                 nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
@@ -71,14 +58,6 @@ class ActorCritic(nn.Module):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
         
-        # If out sequential model is split up, we unite our parameters of actor, mu_head, log_std else we just getting Actor.parameters()
-        self.Actor_parameters = list(self.Actor.parameters()) + \
-                                list(self.mu_head.parameters()) + \
-                                list(self.log_std_head.parameters()) \
-                                if is_continuous else list(self.Actor.parameters())
-            
-        self.Critic_parameters = list(self.Critic.parameters()) # Critic_parameters for discrete or continuous PPO
-        
         self.to(device) # Send of model to GPU or CPU
 
     def forward(self, state: t.Tensor):
@@ -86,31 +65,51 @@ class ActorCritic(nn.Module):
 
     def get_dist(self, state: t.Tensor):
         if self.is_continuous:
-            features = self.Actor(state)
+            features = self.model(state)
 
-            # mu = t.tanh(self.mu_head(features)) * self.action_scaling
             mu = self.mu_head(features)
             std = F.softplus(
-                t.clamp(self.log_std_head(features), min=-self.log_std, max=self.log_std)
+                t.clamp(
+                    input = self.log_std_head(features), 
+                    min = -2, 
+                    max = 2
+                )
             )
-
-            # std = t.exp(t.clamp(self.log_std_head(features), min=-self.log_std, max=self.log_std))
-            # std = t.exp(self.log_std_head(features))
 
             dist = distributions.Normal(mu, std)
         
         else:
-            probs = self.Actor(state)
+            features = self.model(state)
+            probs = self.actor(features)
 
             dist = distributions.Categorical(probs)
 
         return dist
     
     def get_state_value(self, state: t.Tensor):
-        return self.Critic(state).squeeze(-1)
+        features = self.model(state)
+        state_value = self.critic(features)
+
+        return state_value.squeeze(-1)
     
     def get_evaluate(self, states: t.Tensor, actions: t.Tensor):
-        dist = self.get_dist(states)
+        features = self.model(states)
+
+        if self.is_continuous:
+            mu = self.mu_head(features)
+            std = F.softplus(
+                t.clamp(
+                    input = self.log_std_head(features), 
+                    min = -2, 
+                    max = 2
+                )
+            )
+
+            dist = distributions.Normal(mu, std)
+        
+        else:
+            probs = self.actor(features)
+            dist = distributions.Categorical(probs)
 
         log_probs = dist.log_prob(actions)
         dist_entropy = dist.entropy()
@@ -121,6 +120,6 @@ class ActorCritic(nn.Module):
         else:
             pass
         
-        state_value = self.get_state_value(states)
+        state_value = self.critic(features).squeeze_(-1)
 
         return log_probs, state_value, dist_entropy
