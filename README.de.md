@@ -1,6 +1,6 @@
 # Parallel-Reinforcement-Learning
 
-**Sprachen:** Englisch | Russisch | Deutsch | Spanisch | Chinesisch
+**Sprachen:** [Englisch](README.md) | [Russisch](README.ru.md) | [Deutsch](README.de.md) | [Spanisch](README.es.md) | [Chinesisch](README.zh-CN.md)
 
 ## Beschreibung
 Kleines Programm, das PPO dazu bringt, unter Verwendung vieler Umgebungen gleichzeitig und asynchron zu lernen, wodurch das Lernen und die Exploration beschleunigt werden.

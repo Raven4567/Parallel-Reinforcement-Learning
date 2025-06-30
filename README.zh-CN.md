@@ -1,6 +1,6 @@
 # Parallel-Reinforcement-Learning
 
-**语言:** 英语 | 俄语 | 德语 | 西班牙语 | 中文
+**语言:** [英语](README.md) | [俄语](README.ru.md) | [德语](README.de.md) | [西班牙语](README.es.md) | [中文](README.zh-CN.md)
 
 ## 描述
 一个小程序，使 PPO 可以同时异步地使用多个环境进行学习，从而加速学习和探索过程。

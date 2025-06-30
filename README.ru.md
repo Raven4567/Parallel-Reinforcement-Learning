@@ -1,5 +1,5 @@
 # Parallel-Reinforcement-Learning
-**Языки**: English | Русский | Deutsch | Español | 中文
+**Языки**: [English](README.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [中文](README.zh-CN.md)
 
 ## Описание
 Небольшая программа, которая заставляет PPO обучаться, используя множество окружений одновременно, асинхронно, ускоряя обучение и исследование.
