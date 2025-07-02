@@ -108,8 +108,8 @@ if __name__ == '__main__':
 		batch_size=1024, 
 		mini_batch_size=512, 
 		gamma=0.995,
-		use_RND=True, 
-		beta=0.001
+		# use_RND=True, 
+		# beta=0.001
 	)
 
 	env = EnvVectorizer(env=env, num_envs=32) # Векторизованное окружение
@@ -141,7 +141,7 @@ if __name__ == '__main__':
 				states, 
 				actions, 
 				rewards, 
-				dones,
+				dones | truncates,
 
 				is_env_terminal=env.envs_active,
 				num_envs=32

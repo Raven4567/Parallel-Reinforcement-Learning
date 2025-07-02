@@ -128,7 +128,7 @@ class AsyncPPO:
 				states, 
 				actions, 
 				rewards, 
-				dones,
+				dones | truncates,
 			
 				self.env.envs_active,
 				self.num_envs

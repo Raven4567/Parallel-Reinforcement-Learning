@@ -183,6 +183,7 @@ class PPO:
 
         # Compute and normalise advantages
         advantages = returns - old_state_values
+        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Break down data to batches
         batches = self.batch_packer(
@@ -207,21 +208,27 @@ class PPO:
                     batch_log_probs, batch_state_values, batch_entropy = self.policy.get_evaluate(batch_old_states, batch_old_actions)
                             
                     # calculating and clipping of log_probs, 'cause using of exp() function can will lead to inf or nan values
-                    ratios = t.exp(t.clamp(batch_log_probs - batch_old_log_probs, min=-20, max=20))
+                    ratios = t.exp(
+                        t.clamp(
+                            input = batch_log_probs - batch_old_log_probs, 
+                            min   = -20, 
+                            max   =  20
+                        )
+                    )
 
                     surr1 = ratios * batch_advantages # calculating of surr1
-                    surr2 = t.clamp(ratios, min=1 - self.policy_clip, max=1 + self.policy_clip) * batch_advantages  # clipping of ratios, where min is 1 - policy_clip, and max is 1 + policy_clip, next multiplying on advantages
+                    surr2 = t.clamp(
+                        input = ratios, 
+                        min   = 1 - self.policy_clip, 
+                        max   = 1 + self.policy_clip
+                    ) * batch_advantages  # clipping of ratios, where min is 1 - policy_clip, and max is 1 + policy_clip, next multiplying on advantages
                             
-                    # gradient is loss of actor + 0.5 * loss of critic - 0.01 * dist_entropy. 0.01 is entropy bonus
+                    # gradient is loss of actor + 0.5 * loss of critic - 0.01 * distribution entropy. 0.01 is so called entropy bonus
                     loss = -t.min(surr1, surr2) + 0.5 * self.loss_fn(batch_state_values, batch_returns) - 0.01 * batch_entropy
 
                     self.optimizer.zero_grad()
 
                     loss.mean().backward() # using mean of loss to back propagation
-                
-                    # nn.utils.clip_grad_value_(self.policy.actor_parameters, 100) # cliping of actor parameters
-                    # nn.utils.clip_grad_value_(self.policy.critic_parameters, 100) # cliping of critic parameters
-
                     nn.utils.clip_grad_norm_(self.policy.parameters(), 5)
 
                     self.optimizer.step()

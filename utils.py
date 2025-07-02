@@ -30,9 +30,9 @@ def buffer_append(
     ):
 
     i = range_of_active_environments(is_env_terminal) # 
-    idx = indexes_of_active_environments(num_envs, is_env_terminal)
+    idxs = indexes_of_active_environments(num_envs, is_env_terminal)
 
-    for i_, idx_ in zip(i, idx):
+    for i_, idx_ in zip(i, idxs):
         buffer.push(idx_, states[i_], actions[i_], rewards[i_], dones[i_])
 
 def update_active_environments_list(is_env_terminal: np.ndarray, dones: np.ndarray):
