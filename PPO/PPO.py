@@ -154,18 +154,27 @@ class PPO:
         old_state_values = t.cat(old_state_values, dim=0).detach()
         
         # Compute rewards with or without intrinsic rewards
-
         if self.use_RND:
-            rewards = (
-                t.from_numpy(np.array(self.memory.rewards)).to(device, t.float32).add_(
-                    self.rnd.compute_intrinsic_reward(
-                        self.batch_packer(old_states, self.mini_batch_size)
-                    )
+            rewards = t.from_numpy(
+                np.array(
+                    self.memory.rewards
                 )
-            ).detach().cpu().numpy()
+            ).to(device, t.float32).detach().cpu().numpy()
+
+            intrinsic_rewards = self.rnd.compute_intrinsic_reward(
+                self.batch_packer(
+                    values = old_states, 
+                    batch_size = self.mini_batch_size
+                )
+            ).to(device, t.float32).detach().cpu().numpy()
+
+            rewards = np.add(rewards, intrinsic_rewards)
 
             self.rnd.update_pred(
-                self.batch_packer(old_states, self.mini_batch_size)
+                self.batch_packer(
+                    values = old_states, 
+                    batch_size = self.mini_batch_size
+                )
             )
         else:
             rewards = np.array(self.memory.rewards)
@@ -179,10 +188,14 @@ class PPO:
         next_value = state_values[-1]
 
         returns = self.compute_gae(rewards, dones, state_values, next_value)
-        returns = t.from_numpy(np.array(returns)).to(device, t.float32).detach()
+        returns = t.from_numpy(
+            np.array(
+                returns
+            )
+        ).to(device, t.float32).detach()
 
         # Compute and normalise advantages
-        advantages = returns - old_state_values
+        advantages = t.sub(returns, old_state_values)
         # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Break down data to batches
@@ -197,61 +210,74 @@ class PPO:
             batch_size = self.mini_batch_size
         )
 
+        pbar = tqdm(
+            total = old_states.size(0) * self.k_epochs,
+            leave = False
+        )
+
         # K_epochs cycle
-        with tqdm(
-            total = self.k_epochs * old_states.size(0), 
-            leave=False
-        ) as pbar:
-            for _ in range(self.k_epochs):
-                for batch_old_states, batch_old_actions, batch_old_log_probs, batch_advantages, batch_returns in zip(*batches):
-                    # Collecting log probs, values of states, and dist entropy
-                    batch_log_probs, batch_state_values, batch_entropy = self.policy.get_evaluate(batch_old_states, batch_old_actions)
-                            
-                    # calculating and clipping of log_probs, 'cause using of exp() function can will lead to inf or nan values
-                    ratios = t.exp(
-                        t.clamp(
-                            input = batch_log_probs - batch_old_log_probs, 
-                            min   = -20, 
-                            max   =  20
-                        )
+        for _ in range(self.k_epochs):
+            for batch_old_states, batch_old_actions, batch_old_log_probs, batch_advantages, batch_returns in zip(*batches):
+                # Collecting log probs, values of states, and dist entropy
+                batch_log_probs, batch_state_values, batch_entropy = self.policy.get_evaluate(batch_old_states, batch_old_actions)
+                        
+                # calculating and clipping of log_probs, 'cause using of exp() function can will lead to inf or nan values
+                ratios = t.exp(
+                    t.clamp(
+                        input = batch_log_probs - batch_old_log_probs, 
+                        min = -20, 
+                        max =  20
                     )
-
-                    surr1 = ratios * batch_advantages # calculating of surr1
-                    surr2 = t.clamp(
+                )
+                surr1 = t.mul(ratios, batch_advantages) # calculating of surr1
+                
+                # clipping of ratios, where min is 1 - policy_clip, and max is 1 + policy_clip, and multiplying on advantages
+                surr2 = t.mul(
+                    t.clamp(
                         input = ratios, 
-                        min   = 1 - self.policy_clip, 
-                        max   = 1 + self.policy_clip
-                    ) * batch_advantages  # clipping of ratios, where min is 1 - policy_clip, and max is 1 + policy_clip, next multiplying on advantages
-                            
-                    # gradient is loss of actor + 0.5 * loss of critic - 0.01 * distribution entropy. 0.01 is so called entropy bonus
-                    loss = -t.min(surr1, surr2) + 0.5 * self.loss_fn(batch_state_values, batch_returns) - 0.01 * batch_entropy
+                        min = 1 - self.policy_clip, 
+                        max = 1 + self.policy_clip
+                    ),
+                    batch_advantages
+                )
+                        
+                # gradient is loss of actor + 0.5 * loss of critic - 0.01 * distribution entropy. 0.01 is so called entropy bonus
+                loss = -t.min(surr1, surr2) + 0.5 * self.loss_fn(batch_state_values, batch_returns) - 0.01 * batch_entropy
 
-                    self.optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
-                    loss.mean().backward() # using mean of loss to back propagation
-                    nn.utils.clip_grad_norm_(self.policy.parameters(), 5)
+                loss.mean().backward() # using mean of loss to back propagation
+                nn.utils.clip_grad_norm_(self.policy.parameters(), 5)
 
-                    self.optimizer.step()
+                self.optimizer.step()
 
-                    pbar.update(batch_old_states.size(0))
-                    pbar.set_description(f"Loss: {loss.mean().item(): .6f}")
+                pbar.update(batch_old_states.size(0))
+                pbar.set_description(f"Loss: {loss.mean().item(): .6f}")
 
+        # load parameters of policy to policy_old
         self.policy_old.load_state_dict(
             self.policy.state_dict()
-        ) # load parameters of policy to policy_old
+        ) 
 
     def load_weights(self, path: str):
         try:
-            self.policy.load_state_dict(t.load(path+'/Policy_weights.pth', weights_only=True))
-            self.policy_old.load_state_dict(self.policy.state_dict())
+            self.policy.load_state_dict(
+                t.load(path+'/Policy_weights.pth', weights_only=True)
+            )
+            self.policy_old.load_state_dict(
+                self.policy.state_dict()
+            )
             
             if self.use_RND:
-                self.rnd.load_state_dict(t.load(path+'/RND_weights.pth', weights_only=True))
+                self.rnd.load_state_dict(
+                    t.load(path+'/RND_weights.pth', weights_only=True)
+                )
                 
         except FileNotFoundError:
             pass
     
     def save_weights(self, path: str):
         t.save(self.policy.state_dict(), path+'/Policy_weights.pth')
+
         if self.use_RND:
             t.save(self.rnd.state_dict(), path+'/RND_weights.pth')

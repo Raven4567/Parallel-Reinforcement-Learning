@@ -35,20 +35,7 @@ class RND(nn.Module):
 
         del self.model
 
-        for m in self.modules():
-            if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
-                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
-
-            elif isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-                if m.bias is not None:
-                    nn.init.normal_(m.bias, mean=0, std=0.01)
-                    
-            elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.GroupNorm)):
-                nn.init.ones_(m.weight)
-                nn.init.zeros_(m.bias)
+        self.init_weights()
         
         for param in self.target_net.parameters():
             param.requires_grad = False
@@ -64,6 +51,22 @@ class RND(nn.Module):
         self.eval()
         
         self.to(device)
+    
+    def init_weights(self):
+        for m in self.modules():
+            if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+                nn.init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
+
+            elif isinstance(m, nn.Linear):
+                nn.init.xavier_uniform_(m.weight)
+                if m.bias is not None:
+                    nn.init.normal_(m.bias, mean=0, std=0.01)
+                    
+            elif isinstance(m, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.GroupNorm)):
+                nn.init.ones_(m.weight)
+                nn.init.zeros_(m.bias)
     
     @t.no_grad()
     def compute_intrinsic_reward(self, values: list[t.Tensor]) -> t.Tensor:
