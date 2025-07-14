@@ -11,7 +11,13 @@ class Memory:
         self.rewards = []
         self.dones = []
     
-    def push(self, state: np.ndarray, action: np.ndarray, reward: np.ndarray, done: np.ndarray):
+    def push(
+            self, 
+            state: np.ndarray, 
+            action: np.ndarray, 
+            reward: np.ndarray, 
+            done: np.ndarray
+        ):
         self.states.append(state.astype(np.float32))
         self.actions.append(action.astype(np.float32))
         self.rewards.append(reward.astype(np.float32))
