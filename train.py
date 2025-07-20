@@ -9,7 +9,7 @@ if __name__ == '__main__':
 
 	print("Initializing of PPO...")
 	ppo = PPO(
-		is_continuous=True, 
+		is_continuous=False, 
 		observ_dim=env.observation_space.shape[0],
 		action_dim=env.action_space.n, 
 		lr=0.001,
