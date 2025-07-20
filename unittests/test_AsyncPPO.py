@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from PPO import PPO
 
-import AsyncPPO
+import AsyncTools
 import gymnasium as gym
 
 import numpy as np
@@ -22,7 +22,7 @@ class TestVecMemory(unittest.TestCase):
         # self.state_value = np.random.randn(4)
         # self.log_prob = np.random.rand()
     
-        self.memory = AsyncPPO.VecMemory(num_envs=4)
+        self.memory = AsyncTools.AsyncPPO.VecMemory(num_envs=4)
 
     def test_push(self):
         self.memory.push(
@@ -41,7 +41,7 @@ class TestVecMemory(unittest.TestCase):
 class TestEnvVectorizer(unittest.TestCase):
     def setUp(self):
         self.env = gym.make('CartPole-v1')
-        self.env_vectorizer = AsyncPPO.EnvVectorizer(env=self.env, num_envs=4)
+        self.env_vectorizer = AsyncTools.AsyncPPO.EnvVectorizer(env=self.env, num_envs=4)
     
     def test_reset(self):
         self.env_vectorizer.reset()
@@ -58,7 +58,7 @@ class TestAsyncPPO(unittest.TestCase):
             is_continuous=False, action_dim=2, observ_dim=4
         )
 
-        self.async_ppo = AsyncPPO.AsyncPPO(
+        self.async_ppo = AsyncTools.AsyncPPO.AsyncPPO(
             env=self.env,
             ppo=self.model,
             num_envs=4,

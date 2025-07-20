@@ -18,7 +18,7 @@ pip install -r requirements.txt
 ## Быстрый старт
 ```python
 from PPO import PPO
-from AsyncPPO import AsyncPPO
+from AsyncTools.AsyncPPO import AsyncPPO
 
 import gymnasium as gym
 
@@ -79,9 +79,9 @@ if __name__ == '__main__':
 ```python
 # Импорт
 from PPO import PPO
-from AsyncPPO import EnvVectorizer, VecMemory
 
-import utils
+from AsyncTools.AsyncPPO import EnvVectorizer, VecMemory
+from AsyncTools import utils
 
 import torch as t
 import numpy as np

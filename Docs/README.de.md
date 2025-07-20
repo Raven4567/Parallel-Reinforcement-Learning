@@ -81,9 +81,9 @@ Auch in diesem Beispiel werde ich meine eigene Implementierung verwenden, aber S
 ```python
 # Importieren
 from PPO import PPO
-from AsyncPPO import EnvVectorizer, VecMemory
 
-import utils
+from AsyncTools.AsyncPPO import EnvVectorizer, VecMemory
+from AsyncTools import utils
 
 import torch as t
 import numpy as np

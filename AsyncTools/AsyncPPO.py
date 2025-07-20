@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 from copy import deepcopy
 
-import utils
+import AsyncTools.utils as utils
 
 class VecMemory:
 	def __init__(self, num_envs: int):

@@ -1,6 +1,6 @@
 # Parallel-Reinforcement-Learning
 
-**Languages:** [English](README.md) | [Русский](README.ru.md) | [Deutsch](README.de.md) | [Español](README.es.md) | [中文](README.zh-CN.md)
+**Languages:** [English](Docs/README.md) | [Русский](Docs/README.ru.md) | [Deutsch](Docs/README.de.md) | [Español](Docs/README.es.md) | [中文](Docs/README.zh-CN.md)
 
 ## Description
 Small program that makes PPO learn using many enviroments at the same time, anyschronously, accelerating the learning and exploration.
@@ -19,7 +19,7 @@ being in the installed `.../Parallel-Reinforcement-Learning` folder.
 ## Quick start
 ```python
 from PPO import PPO
-from AsyncPPO import AsyncPPO
+from AsyncTools.AsyncPPO import AsyncPPO
 
 import gymnasium as gym
 
@@ -81,9 +81,9 @@ Also in this example I'll be using my own implementation, but feel free to copy 
 ```python
 # Import
 from PPO import PPO
-from AsyncPPO import EnvVectorizer, VecMemory
 
-import utils
+from AsyncTools.AsyncPPO import EnvVectorizer, VecMemory
+from AsyncTools import utils
 
 import torch as t
 import numpy as np

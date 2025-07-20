@@ -196,7 +196,7 @@ class PPO:
 
         # Compute and normalise advantages
         advantages = t.sub(returns, old_state_values)
-        # advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
         # Break down data to batches
         batches = self.batch_packer(
@@ -247,8 +247,8 @@ class PPO:
                 self.optimizer.zero_grad()
 
                 loss.mean().backward() # using mean of loss to back propagation
-                nn.utils.clip_grad_norm_(self.policy.parameters(), 5)
-
+                nn.utils.clip_grad_norm_(self.policy.parameters(), 2.0)
+                    
                 self.optimizer.step()
 
                 pbar.update(batch_old_states.size(0))

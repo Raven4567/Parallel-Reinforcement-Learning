@@ -19,7 +19,7 @@ estando en la carpeta Parallel-Reinforcement-Learning instalada.
 ## Inicio rápido
 ```python
 from PPO import PPO
-from AsyncPPO import AsyncPPO
+from AsyncTools.AsyncPPO import AsyncPPO
 
 import gymnasium as gym
 
@@ -80,9 +80,9 @@ También en este ejemplo usaré mi propia implementación, pero siéntete libre 
 ```python
 # Importar
 from PPO import PPO
-from AsyncPPO import EnvVectorizer, VecMemory
 
-import utils
+from AsyncTools.AsyncPPO import EnvVectorizer, VecMemory
+from AsyncTools import utils
 
 import torch as t
 import numpy as np
