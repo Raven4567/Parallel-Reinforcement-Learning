@@ -19,9 +19,7 @@ if __name__ == '__main__':
 		GAE_lambda=0.95,
 		gamma=0.995,
 		batch_size=512,
-		mini_batch_size=256,
-		# use_RND=True,
-		# beta=0.001
+		mini_batch_size=256
 	)
 	
 	print("Initializing of asynchronous PPO...")
