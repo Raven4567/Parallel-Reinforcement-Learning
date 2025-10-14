@@ -239,17 +239,9 @@ class PPO:
             self.policy_old.load_state_dict(
                 self.policy.state_dict()
             )
-            
-            if self.use_RND:
-                self.rnd.load_state_dict(
-                    t.load(path+'/RND_weights.pth', weights_only=True)
-                )
                 
         except FileNotFoundError:
             pass
     
     def save_weights(self, path: str):
         t.save(self.policy.state_dict(), path+'/Policy_weights.pth')
-
-        if self.use_RND:
-            t.save(self.rnd.state_dict(), path+'/RND_weights.pth')
