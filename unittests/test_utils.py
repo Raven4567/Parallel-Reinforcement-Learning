@@ -1,4 +1,4 @@
-import unittest
+import pytest
 
 import os
 import sys
@@ -11,7 +11,7 @@ from PPO import Memory
 
 import numpy as np
 
-class TestUtils(unittest.TestCase):
+class TestUtils:
     def test_indexes_of_active_environments(self):
         AsyncTools.utils.indexes_of_active_environments(4, np.random.choice([False, True], 4))
 
@@ -61,6 +61,3 @@ class TestUtils(unittest.TestCase):
             buffer,
             target_buffer = Memory()
         )
-
-if __name__ == '__main__':
-    unittest.main()
