@@ -95,11 +95,11 @@ class ActorCritic(nn.Module):
 
         return dist
     
-    # def get_state_value(self, state: t.Tensor):
-    #     features = self.model(state)
-    #     state_value = self.critic(features)
+    def get_state_value(self, state: t.Tensor):
+        features = self.model(state)
+        state_value = self.critic(features)
 
-    #     return state_value.squeeze(-1)
+        return state_value.squeeze(-1)
     
     def get_evaluate(self, states: t.Tensor, actions: t.Tensor):
         features = self.model(states)
