@@ -61,3 +61,6 @@ class TestUtils:
             buffer,
             target_buffer = Memory()
         )
+
+if __name__ == "__main__":
+    pytest.main()

@@ -100,3 +100,6 @@ class TestAsyncPPO:
     def test_run(self, setup_async_ppo):
         async_ppo = setup_async_ppo
         async_ppo.run()
+
+if __name__ == "__main__":
+    pytest.main()

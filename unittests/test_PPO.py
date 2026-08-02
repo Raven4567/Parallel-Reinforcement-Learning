@@ -211,3 +211,6 @@ class TestUtils:
 
         for batch_v1 in batch:
             assert batch_v1.shape == (32, 4)
+
+if __name__ == "__main__":
+    pytest.main()
